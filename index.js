@@ -285,12 +285,9 @@ function getAccessibleLines(
   fromStation,
   allLines
 ) {
-  return allLines
-    .filter((line) => line.stations.includes(fromStation) && line.name !== onLine?.name
-        
-        
-    )
-    
+  return allLines.filter( line  => (
+    line.stations.includes(fromStation) && line.name !== onLine?.name
+  ))   
 }
 
 /**
@@ -325,87 +322,95 @@ function getAccessibleLines(
 ) {
   //get origin line from origin station and get stations, check if destination station is there
 
-  const linesOfOriginStation = getAccessibleLines(
+  const linesThroughOriginStation = getAccessibleLines(
     null,
     originStation,
     allLines
   );
 
-  // const accessibleStations = {}
+  // Prepare to make a list of stations where you can change lines
+  const switchStations = {}
 
-  const res = linesOfOriginStation.map((line) =>
-    // const stations = line.stations // undefined
+  const directRoutes = linesThroughOriginStation.filter( line => {
+    // <<< HACK: .filter() is not intended to be used like
+    //           .forEach() ... but why not?
+    line.stations.forEach( station => {
+      switchStations[station] = line
+    })
+    // HACK >>>
 
-    // if (stations) {
-    //   stations.forEach( station => {
-    //     accessibleStations[station] = line.name
-    //   })
-    // }
+    // Only include lines that go directly to the destination
+    return line?.stations.includes(destinationStation)
+  });
  
-    line?.stations.includes(originStation)
-      ? 
-        [  { action: "enter", station: originStation, line },
-          {
-            action: "exit",
-            station: destinationStation,
-            line
-          }]
-        
-      : [{ action: "enter",
-           station: originStation,
-           line,
-           stations: line.stations
-        }]
-  );
+  if (directRoutes.length) {
+    // We have at least one direct line between the stations
+    const line = directRoutes[0] // choose the first
 
-  console.log("res", res)
-  const noChange = res.filter((route) => route.length === 2)[0]
- 
-  console.log(noChange);
-  if (noChange) {
-    return noChange
-  };
-
-  return [ {
+    return [ {
       action: "enter",
-      station: "Kochstraße",
-      line: { name: "U6" }
-    }, {
-      action: "switch",
-      station: "Mehringdamm",
-      line: { name: "U7" }
+      station: originStation,
+      line
     }, {
       action: "exit",
-      station: "Yorckstraße",
-      line: { name: "U7" }} ]
+      station: destinationStation,
+      line
+    } ]
+  };
 
-  // const linesOfDestination = getAccessibleLines(
-  //   null,
-  //   originStation,
-  //   allLines
-  // );
+  // No direct line found. Look for a line change.
+  const switchNames = Object.keys(switchStations)
 
+  const linesThroughDestination = getAccessibleLines(
+    null,
+    destinationStation,
+    allLines
+  );
 
-  //find line of destination station
-  //check in origin line stations get accessible lines and check for line of destination station
-  // const linesOfDestinationStation = getAccessibleLines(
-  //   null,
-  //   destinationStation,
-  //   allLines
-  // );
+  let startLine
+    , switchLine
+    , switchStation
 
-  //console.log( linesOfDestinationStation);
-  //   console.log("dest", linesOfDestinationStation.map((x) => x?.name));
-  //  const namesLineOfdestination=linesOfDestinationStation.map((x) => x?.name)
-  //console.log("destnames",namesLineOfdestination.join(",")
+  linesThroughDestination.every( line => {
+    line.stations.every( station => {
+      if (switchNames.indexOf(station) > -1) {
+        // Can switch to this line at this station
+        startLine = switchStations[station]
+        switchLine = line
+        switchStation = station
+        return false // stop looking
+      }
 
-  // console.log("res", res);
-  //action: "enter",
-  //station: originStation,
-  //line: allLines
-  // throw new Error("to be implemented");
-  // return noChange as any;
+      // Keep checking the other stations
+      return true
+    })
+
+    return !!switchStation
+  })
+
+  // The instructions say that we can assume that there will be
+  // a switch station, so we don't need to check
+  return [ {
+    action: "enter",
+    station: originStation,
+    line: startLine
+  }, {
+    action: "switch",
+    station: switchStation,
+    line: switchLine
+  }, {
+    action: "exit",
+    station: "Yorckstraße",
+    line: switchLine
+  } ]
 }
 
 
-const route = getRoute("Siemensdamm", "Jungfernheide", lines)
+// Check a direct line
+let route = getRoute("Siemensdamm", "Jungfernheide", lines)
+console.log("Siemensdamm - Jungfernheide:", route);
+
+
+// Check a route that requires a change
+route = getRoute("Kochstraße", "Yorckstraße", lines)
+console.log("Kochstraße - Yorckstraße:", route);
